@@ -1,12 +1,9 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { FileImage, FileVideo, Upload, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { FileImage, FileVideo, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export interface EvidenceFilePickerHandle {
-  reset: () => void;
-}
+import { compressImage } from "@/lib/compress-image";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -14,46 +11,42 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const EvidenceFilePicker = forwardRef<
-  EvidenceFilePickerHandle,
-  { name?: string; compact?: boolean }
->(function EvidenceFilePicker({ name = "evidence", compact = false }, ref) {
-  const [files, setFiles] = useState<File[]>([]);
+export function EvidenceFilePicker({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: File[];
+  onChange: (files: File[]) => void;
+  compact?: boolean;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [processing, setProcessing] = useState(false);
 
-  function syncFileInput(next: File[]) {
-    const dt = new DataTransfer();
-    next.forEach((f) => dt.items.add(f));
-    if (fileInputRef.current) {
-      fileInputRef.current.files = dt.files;
+  async function handleFilesSelected(selected: FileList | null) {
+    if (!selected || selected.length === 0) return;
+    setProcessing(true);
+    try {
+      const processed = await Promise.all(
+        Array.from(selected).map((file) =>
+          file.type.startsWith("image/") ? compressImage(file) : file,
+        ),
+      );
+      onChange([...value, ...processed]);
+    } finally {
+      setProcessing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
-  useImperativeHandle(ref, () => ({
-    reset() {
-      setFiles([]);
-      syncFileInput([]);
-    },
-  }));
-
-  function handleFilesSelected(selected: FileList | null) {
-    if (!selected || selected.length === 0) return;
-    const merged = [...files, ...Array.from(selected)];
-    setFiles(merged);
-    syncFileInput(merged);
-  }
-
   function removeFile(index: number) {
-    const next = files.filter((_, i) => i !== index);
-    setFiles(next);
-    syncFileInput(next);
+    onChange(value.filter((_, i) => i !== index));
   }
 
   return (
     <div className="space-y-3">
       <input
         ref={fileInputRef}
-        name={name}
         type="file"
         accept="image/*,video/*"
         multiple
@@ -63,21 +56,32 @@ export const EvidenceFilePicker = forwardRef<
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
+        disabled={processing}
         className={cn(
-          "flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground",
+          "flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground disabled:pointer-events-none disabled:opacity-60",
           compact ? "px-4 py-4" : "px-4 py-8",
         )}
       >
-        <Upload className="size-5" />
+        {processing ? (
+          <Loader2 className="size-5 animate-spin" />
+        ) : (
+          <Upload className="size-5" />
+        )}
         <span>
-          <span className="font-medium text-foreground">Click to upload</span>{" "}
-          photos or videos
+          {processing ? (
+            "Processing..."
+          ) : (
+            <>
+              <span className="font-medium text-foreground">Click to upload</span>{" "}
+              photos or videos
+            </>
+          )}
         </span>
       </button>
 
-      {files.length > 0 ? (
+      {value.length > 0 ? (
         <ul className="space-y-1.5">
-          {files.map((file, index) => (
+          {value.map((file, index) => (
             <li
               key={`${file.name}-${index}`}
               className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
@@ -104,4 +108,4 @@ export const EvidenceFilePicker = forwardRef<
       ) : null}
     </div>
   );
-});
+}

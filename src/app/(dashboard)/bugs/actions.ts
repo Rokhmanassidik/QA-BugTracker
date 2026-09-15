@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -39,49 +38,7 @@ async function notifyUser(
   });
 }
 
-function evidenceTypeFor(file: File): EvidenceFileType | null {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
-  return null;
-}
-
-async function uploadEvidenceFiles(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  bugId: string,
-  files: File[],
-  uploadedBy: string,
-) {
-  for (const file of files) {
-    if (file.size === 0) continue;
-    const fileType = evidenceTypeFor(file);
-    if (!fileType) continue;
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${bugId}/${randomUUID()}-${safeName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(EVIDENCE_BUCKET)
-      .upload(path, file, { contentType: file.type });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload evidence: ${uploadError.message}`);
-    }
-
-    const { error: insertError } = await supabase.from("bug_evidence").insert({
-      bug_id: bugId,
-      file_path: path,
-      file_type: fileType,
-      file_name: file.name,
-      uploaded_by: uploadedBy,
-    });
-
-    if (insertError) {
-      throw new Error(`Failed to save evidence: ${insertError.message}`);
-    }
-  }
-}
-
-export async function createBug(formData: FormData) {
+export async function createBug(formData: FormData): Promise<{ bugId: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -127,14 +84,19 @@ export async function createBug(formData: FormData) {
     throw new Error(`Failed to create bug: ${error?.message}`);
   }
 
-  const files = formData.getAll("evidence").filter((f): f is File => f instanceof File);
-  await uploadEvidenceFiles(supabase, bug.id, files, user.id);
-
   revalidatePath("/");
-  redirect(`/bugs/${bug.id}`);
+  return { bugId: bug.id };
 }
 
-export async function addEvidence(bugId: string, formData: FormData) {
+// Records evidence that the browser has already uploaded directly to
+// Supabase Storage (see src/lib/upload-evidence.ts). No file bytes pass
+// through this action, so it isn't subject to server request size limits.
+export async function recordEvidence(
+  bugId: string,
+  files: { path: string; file_type: EvidenceFileType; file_name: string }[],
+) {
+  if (files.length === 0) return;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -144,8 +106,19 @@ export async function addEvidence(bugId: string, formData: FormData) {
     redirect("/login");
   }
 
-  const files = formData.getAll("evidence").filter((f): f is File => f instanceof File);
-  await uploadEvidenceFiles(supabase, bugId, files, user.id);
+  const { error } = await supabase.from("bug_evidence").insert(
+    files.map((file) => ({
+      bug_id: bugId,
+      file_path: file.path,
+      file_type: file.file_type,
+      file_name: file.file_name,
+      uploaded_by: user.id,
+    })),
+  );
+
+  if (error) {
+    throw new Error(`Failed to save evidence: ${error.message}`);
+  }
 
   revalidatePath(`/bugs/${bugId}`);
 }

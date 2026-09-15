@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EvidenceFilePicker } from "@/components/evidence-file-picker";
-import { createBug } from "../actions";
+import { uploadEvidenceFiles } from "@/lib/upload-evidence";
+import { createBug, recordEvidence } from "../actions";
 import {
   BUG_PRIORITIES,
   BUG_SEVERITIES,
@@ -44,21 +45,14 @@ const EMPTY_FIELDS: GeneratedFields = {
   expected_result: "",
 };
 
-function SubmitButton({ disabled }: { disabled?: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="lg" disabled={pending || disabled}>
-      {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-      {pending ? "Saving..." : "Save Bug Report"}
-    </Button>
-  );
-}
-
 export function NewBugForm() {
+  const router = useRouter();
   const [rawText, setRawText] = useState("");
   const [generating, setGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
   const [fields, setFields] = useState<GeneratedFields>(EMPTY_FIELDS);
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleGenerate() {
     if (!rawText.trim()) {
@@ -89,6 +83,23 @@ export function NewBugForm() {
   }
 
   const canSubmit = fields.title.trim() !== "" && fields.description.trim() !== "";
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setIsSubmitting(true);
+    try {
+      const { bugId } = await createBug(formData);
+      if (evidenceFiles.length > 0) {
+        const uploaded = await uploadEvidenceFiles(bugId, evidenceFiles);
+        await recordEvidence(bugId, uploaded);
+      }
+      router.push(`/bugs/${bugId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save bug report.");
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="space-y-10">
@@ -123,7 +134,7 @@ export function NewBugForm() {
         </Button>
       </div>
 
-      <form action={createBug} className="space-y-10">
+      <form onSubmit={handleSubmit} className="space-y-10">
         <input type="hidden" name="ai_generated" value={String(aiGenerated)} />
         <input type="hidden" name="original_report" value={rawText} />
 
@@ -242,10 +253,13 @@ export function NewBugForm() {
 
         <div className="space-y-3 border-t pt-6">
           <Label>Evidence</Label>
-          <EvidenceFilePicker />
+          <EvidenceFilePicker value={evidenceFiles} onChange={setEvidenceFiles} />
         </div>
 
-        <SubmitButton disabled={!canSubmit} />
+        <Button type="submit" size="lg" disabled={isSubmitting || !canSubmit}>
+          {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
+          {isSubmitting ? "Saving..." : "Save Bug Report"}
+        </Button>
       </form>
     </div>
   );

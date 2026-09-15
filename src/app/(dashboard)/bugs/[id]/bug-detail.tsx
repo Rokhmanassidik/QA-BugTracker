@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { useFormStatus } from "react-dom";
 import {
   ArrowLeft,
   Check,
@@ -37,17 +37,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  EvidenceFilePicker,
-  type EvidenceFilePickerHandle,
-} from "@/components/evidence-file-picker";
+import { EvidenceFilePicker } from "@/components/evidence-file-picker";
+import { uploadEvidenceFiles } from "@/lib/upload-evidence";
 import { PriorityBadge, SeverityBadge } from "@/components/bug-badges";
 import { BugComments } from "./bug-comments";
 import {
-  addEvidence,
   assignBug,
   deleteBug,
   deleteEvidence,
+  recordEvidence,
   updateBugFields,
   updateBugStatus,
 } from "../actions";
@@ -88,16 +86,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-2 text-sm font-medium text-muted-foreground">{children}</h2>;
 }
 
-function AddEvidenceButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" variant="outline" size="sm" disabled={pending}>
-      {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-      {pending ? "Uploading..." : "Add Evidence"}
-    </Button>
-  );
-}
-
 export function BugDetail({
   bug,
   profiles,
@@ -111,6 +99,7 @@ export function BugDetail({
   comments: BugComment[];
   currentUserId: string | null;
 }) {
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -118,7 +107,8 @@ export function BugDetail({
   const [showAllVideos, setShowAllVideos] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const evidencePickerRef = useRef<EvidenceFilePickerHandle>(null);
+  const [pendingEvidence, setPendingEvidence] = useState<File[]>([]);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   const [fields, setFields] = useState({
     title: bug.title,
     description: bug.description,
@@ -190,13 +180,19 @@ export function BugDetail({
     });
   }
 
-  async function handleUploadEvidence(formData: FormData) {
+  async function handleUploadEvidence() {
+    if (pendingEvidence.length === 0) return;
+    setIsUploadingEvidence(true);
     try {
-      await addEvidence(bug.id, formData);
+      const uploaded = await uploadEvidenceFiles(bug.id, pendingEvidence);
+      await recordEvidence(bug.id, uploaded);
       toast.success("Evidence added.");
-      evidencePickerRef.current?.reset();
+      setPendingEvidence([]);
+      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to upload evidence.");
+    } finally {
+      setIsUploadingEvidence(false);
     }
   }
 
@@ -543,10 +539,23 @@ export function BugDetail({
             </div>
           ) : null}
 
-          <form action={handleUploadEvidence} className="space-y-3">
-            <EvidenceFilePicker ref={evidencePickerRef} compact />
-            <AddEvidenceButton />
-          </form>
+          <div className="space-y-3">
+            <EvidenceFilePicker value={pendingEvidence} onChange={setPendingEvidence} compact />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleUploadEvidence}
+              disabled={isUploadingEvidence || pendingEvidence.length === 0}
+            >
+              {isUploadingEvidence ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              {isUploadingEvidence ? "Uploading..." : "Add Evidence"}
+            </Button>
+          </div>
         </section>
 
         <section className="pt-8">
