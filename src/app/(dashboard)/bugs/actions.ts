@@ -14,34 +14,29 @@ import type {
 
 const EVIDENCE_BUCKET = "bug-evidence";
 
-async function notifyOthers(
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+// Notifies a single recipient (the bug's assignee) about activity on a bug.
+// Never notifies the person who caused the activity.
+async function notifyUser(
   supabase: Awaited<ReturnType<typeof createClient>>,
   actorId: string,
+  recipientId: string | null,
   bugId: string,
   type: NotificationType,
-  action: string,
+  message: string,
 ) {
-  const [{ data: recipients }, { data: actor }, { data: bug }] = await Promise.all([
-    supabase.from("profiles").select("id").neq("id", actorId),
-    supabase.from("profiles").select("full_name").eq("id", actorId).single(),
-    supabase.from("bugs").select("title").eq("id", bugId).single(),
-  ]);
+  if (!recipientId || recipientId === actorId) return;
 
-  if (!recipients || recipients.length === 0) return;
-
-  const actorName = actor?.full_name || "Someone";
-  const bugTitle = bug?.title || "a bug";
-  const message = `${actorName} ${action} "${bugTitle}"`;
-
-  await supabase.from("notifications").insert(
-    recipients.map((recipient) => ({
-      recipient_id: recipient.id,
-      actor_id: actorId,
-      bug_id: bugId,
-      type,
-      message,
-    })),
-  );
+  await supabase.from("notifications").insert({
+    recipient_id: recipientId,
+    actor_id: actorId,
+    bug_id: bugId,
+    type,
+    message,
+  });
 }
 
 function evidenceTypeFor(file: File): EvidenceFileType | null {
@@ -197,17 +192,26 @@ export async function updateBugStatus(bugId: string, status: BugStatus) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { error } = await supabase
+  const { data: bug, error } = await supabase
     .from("bugs")
     .update({ status })
-    .eq("id", bugId);
+    .eq("id", bugId)
+    .select("assignee_id, title")
+    .single();
 
   if (error) {
     throw new Error(`Failed to update status: ${error.message}`);
   }
 
-  if (user) {
-    await notifyOthers(supabase, user.id, bugId, "status_change", `changed the status to ${status} on`);
+  if (user && bug) {
+    await notifyUser(
+      supabase,
+      user.id,
+      bug.assignee_id,
+      bugId,
+      "status_change",
+      `${status}: ${truncate(bug.title, 40)}`,
+    );
   }
 
   revalidatePath(`/bugs/${bugId}`);
@@ -216,13 +220,30 @@ export async function updateBugStatus(bugId: string, status: BugStatus) {
 
 export async function assignBug(bugId: string, assigneeId: string | null) {
   const supabase = await createClient();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: bug, error } = await supabase
     .from("bugs")
     .update({ assignee_id: assigneeId })
-    .eq("id", bugId);
+    .eq("id", bugId)
+    .select("title")
+    .single();
 
   if (error) {
     throw new Error(`Failed to assign bug: ${error.message}`);
+  }
+
+  if (user && bug) {
+    await notifyUser(
+      supabase,
+      user.id,
+      assigneeId,
+      bugId,
+      "assigned",
+      `Assigned: ${truncate(bug.title, 40)}`,
+    );
   }
 
   revalidatePath(`/bugs/${bugId}`);
@@ -265,17 +286,29 @@ export async function addComment(bugId: string, content: string) {
   const trimmed = content.trim();
   if (!trimmed) return;
 
-  const { error } = await supabase.from("bug_comments").insert({
-    bug_id: bugId,
-    author_id: user.id,
-    content: trimmed,
-  });
+  const [{ error }, { data: bug }] = await Promise.all([
+    supabase.from("bug_comments").insert({
+      bug_id: bugId,
+      author_id: user.id,
+      content: trimmed,
+    }),
+    supabase.from("bugs").select("assignee_id, title").eq("id", bugId).single(),
+  ]);
 
   if (error) {
     throw new Error(`Failed to post comment: ${error.message}`);
   }
 
-  await notifyOthers(supabase, user.id, bugId, "new_comment", "commented on");
+  if (bug) {
+    await notifyUser(
+      supabase,
+      user.id,
+      bug.assignee_id,
+      bugId,
+      "new_comment",
+      `New comment: ${truncate(bug.title, 40)}`,
+    );
+  }
 
   revalidatePath(`/bugs/${bugId}`);
 }

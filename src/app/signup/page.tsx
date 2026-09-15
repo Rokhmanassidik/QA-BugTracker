@@ -6,12 +6,20 @@ import { Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login, type LoginState } from "./actions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { USER_ROLES } from "@/types/database";
+import { signup, type SignupState } from "./actions";
 
-const initialState: LoginState = { error: null };
+const initialState: SignupState = { error: null };
 
-export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(login, initialState);
+export default function SignupPage() {
+  const [state, formAction, pending] = useActionState(signup, initialState);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -19,8 +27,10 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-3 text-center">
           <Bug className="size-6" strokeWidth={1.5} />
           <div className="space-y-1">
-            <h1 className="text-base font-medium">QA Bug Tracker</h1>
-            <p className="text-sm text-muted-foreground">Sign in to continue.</p>
+            <h1 className="text-base font-medium">Create an account</h1>
+            <p className="text-sm text-muted-foreground">
+              Sign up as PM, Developer, or QA for this project.
+            </p>
           </div>
         </div>
 
@@ -31,6 +41,7 @@ export default function LoginPage() {
               id="username"
               name="username"
               autoComplete="username"
+              pattern="[a-zA-Z0-9._-]{3,20}"
               required
             />
           </div>
@@ -40,22 +51,38 @@ export default function LoginPage() {
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
+              minLength={8}
               required
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="role">Role</Label>
+            <Select name="role" defaultValue="QA">
+              <SelectTrigger id="role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {USER_ROLES.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {role}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {state.error ? (
             <p className="text-sm text-destructive">{state.error}</p>
           ) : null}
           <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Signing in..." : "Sign In"}
+            {pending ? "Creating account..." : "Sign Up"}
           </Button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-foreground underline underline-offset-4">
-            Sign up
+          Already have an account?{" "}
+          <Link href="/login" className="text-foreground underline underline-offset-4">
+            Sign in
           </Link>
         </p>
       </div>

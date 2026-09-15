@@ -29,7 +29,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const isAuthPage =
+    request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/signup");
   const isApiRoute = request.nextUrl.pathname.startsWith("/api");
 
   // API routes enforce their own auth and return JSON 401s; redirecting them
@@ -38,13 +40,13 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!user && !isLoginPage) {
+  if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

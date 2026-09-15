@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeftRight, Bug } from "lucide-react";
+import { Bug, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
@@ -45,8 +45,8 @@ export function NavBar({
           ) : null}
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">
-              <ArrowLeftRight className="size-3.5" />
-              Switch account
+              <LogOut className="size-3.5" />
+              Log out
             </Button>
           </form>
         </div>

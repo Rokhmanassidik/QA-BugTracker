@@ -1,6 +1,6 @@
-export type UserRole = "PM" | "QA";
+export type UserRole = "PM" | "DEV" | "QA";
 
-export const USER_ROLES: UserRole[] = ["PM", "QA"];
+export const USER_ROLES: UserRole[] = ["PM", "DEV", "QA"];
 
 export type BugPriority = "Low" | "Medium" | "High" | "Critical";
 export const BUG_PRIORITIES: BugPriority[] = ["Low", "Medium", "High", "Critical"];
@@ -20,6 +20,7 @@ export const BUG_STATUSES: BugStatus[] = [
 export interface Profile {
   id: string;
   full_name: string;
+  username: string | null;
   role: UserRole;
   created_at: string;
 }
@@ -68,7 +69,7 @@ export interface BugComment {
   created_at: string;
 }
 
-export type NotificationType = "status_change" | "new_comment";
+export type NotificationType = "assigned" | "status_change" | "new_comment";
 
 export interface AppNotification {
   id: string;

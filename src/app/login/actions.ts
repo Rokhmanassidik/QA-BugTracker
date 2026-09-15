@@ -2,33 +2,31 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/database";
+import { normalizeUsername, usernameToEmail } from "@/lib/username";
 
-export interface LoginResult {
-  error: string;
+export interface LoginState {
+  error: string | null;
 }
 
-function credentialsFor(role: UserRole) {
-  if (role === "PM") {
-    return { email: process.env.PM_EMAIL, password: process.env.PM_PASSWORD };
-  }
-  return { email: process.env.QA_EMAIL, password: process.env.QA_PASSWORD };
-}
+export async function login(
+  _prevState: LoginState,
+  formData: FormData,
+): Promise<LoginState> {
+  const username = normalizeUsername(String(formData.get("username") || ""));
+  const password = String(formData.get("password") || "");
 
-export async function loginAs(role: UserRole): Promise<LoginResult | void> {
-  const { email, password } = credentialsFor(role);
-
-  if (!email || !password) {
-    return {
-      error: `The ${role} account has not been configured. Set ${role}_EMAIL and ${role}_PASSWORD in the environment variables.`,
-    };
+  if (!username || !password) {
+    return { error: "Username and password are required." };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password,
+  });
 
   if (error) {
-    return { error: `Unable to sign in as ${role}: ${error.message}` };
+    return { error: "Invalid username or password." };
   }
 
   redirect("/");

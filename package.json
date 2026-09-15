@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "seed:users": "node --env-file=.env.local scripts/seed-users.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
