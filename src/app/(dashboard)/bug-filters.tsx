@@ -29,7 +29,7 @@ export function BugFilters() {
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       <div className="space-y-1">
         <Label htmlFor="bug-search" className="text-xs text-muted-foreground">
           Search
