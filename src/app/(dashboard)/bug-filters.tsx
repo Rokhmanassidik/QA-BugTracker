@@ -24,6 +24,7 @@ export function BugFilters() {
     } else {
       params.set(key, value);
     }
+    params.delete("page");
     router.push(`/?${params.toString()}`);
   }
 
@@ -33,7 +34,7 @@ export function BugFilters() {
         <Label htmlFor="bug-search" className="text-xs text-muted-foreground">
           Search
         </Label>
-        <div className="relative">
+        <div className="relative flex">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="bug-search"

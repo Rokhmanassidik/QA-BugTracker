@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Inbox } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Inbox } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,8 @@ import { PriorityBadge, SeverityBadge, StatusBadge } from "@/components/bug-badg
 import { BugFilters } from "./bug-filters";
 import { BUG_STATUSES, type Bug, type BugStatus, type Profile } from "@/types/database";
 
+const PAGE_SIZE = 10;
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -22,6 +24,20 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+function pageHref(
+  params: { status?: string; priority?: string; severity?: string; q?: string },
+  page: number,
+) {
+  const sp = new URLSearchParams();
+  if (params.status) sp.set("status", params.status);
+  if (params.priority) sp.set("priority", params.priority);
+  if (params.severity) sp.set("severity", params.severity);
+  if (params.q) sp.set("q", params.q);
+  if (page > 1) sp.set("page", String(page));
+  const qs = sp.toString();
+  return qs ? `/?${qs}` : "/";
 }
 
 export default async function DashboardPage({
@@ -32,18 +48,27 @@ export default async function DashboardPage({
     priority?: string;
     severity?: string;
     q?: string;
+    page?: string;
   }>;
 }) {
-  const { status, priority, severity, q } = await searchParams;
+  const { status, priority, severity, q, page: pageParam } = await searchParams;
   const supabase = await createClient();
 
-  let query = supabase.from("bugs").select("*").order("created_at", { ascending: false });
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  let query = supabase
+    .from("bugs")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
   if (status) query = query.eq("status", status);
   if (priority) query = query.eq("priority", priority);
   if (severity) query = query.eq("severity", severity);
   if (q) query = query.ilike("title", `%${q}%`);
 
-  const [{ data: bugs }, { data: profiles }, { data: allStatuses }] = await Promise.all([
+  const [{ data: bugs, count }, { data: profiles }, { data: allStatuses }] = await Promise.all([
     query,
     supabase.from("profiles").select("*"),
     supabase.from("bugs").select("status"),
@@ -58,6 +83,9 @@ export default async function DashboardPage({
     statusCounts.set(row.status, (statusCounts.get(row.status) || 0) + 1);
   }
   const totalBugs = (allStatuses || []).length;
+  const matchingCount = count || 0;
+  const totalPages = Math.max(1, Math.ceil(matchingCount / PAGE_SIZE));
+  const filterParams = { status, priority, severity, q };
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -113,7 +141,7 @@ export default async function DashboardPage({
               return (
                 <TableRow key={bug.id}>
                   <TableCell className="text-sm text-muted-foreground">
-                    {index + 1}
+                    {from + index + 1}
                   </TableCell>
                   <TableCell className="max-w-xs font-medium">
                     <Link
@@ -164,6 +192,45 @@ export default async function DashboardPage({
             ) : null}
           </TableBody>
         </Table>
+
+        {matchingCount > 0 ? (
+          <div className="flex items-center justify-between border-t px-1 py-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {from + 1}–{Math.min(from + PAGE_SIZE, matchingCount)} of {matchingCount}
+            </p>
+            <div className="flex items-center gap-2">
+              {page > 1 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href={pageHref(filterParams, page - 1)}><ChevronLeft className="size-4" />Previous</Link>}
+                />
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  <ChevronLeft className="size-4" />
+                  Previous
+                </Button>
+              )}
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href={pageHref(filterParams, page + 1)}>Next<ChevronRight className="size-4" /></Link>}
+                />
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  Next
+                  <ChevronRight className="size-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
