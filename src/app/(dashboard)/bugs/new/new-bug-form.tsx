@@ -51,6 +51,7 @@ export function NewBugForm() {
   const [generating, setGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
   const [fields, setFields] = useState<GeneratedFields>(EMPTY_FIELDS);
+  const [testCaseId, setTestCaseId] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -147,6 +148,21 @@ export function NewBugForm() {
               required
               value={fields.title}
               onChange={(e) => setFields((f) => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="test-case-id">
+              Test Case ID
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="test-case-id"
+              name="test_case_id"
+              placeholder="e.g., TC-102"
+              className="max-w-xs"
+              value={testCaseId}
+              onChange={(e) => setTestCaseId(e.target.value)}
             />
           </div>
 

@@ -112,6 +112,7 @@ export function BugDetail({
   const [fields, setFields] = useState({
     title: bug.title,
     description: bug.description,
+    test_case_id: bug.test_case_id || "",
     priority: bug.priority,
     severity: bug.severity,
     steps_to_reproduce: bug.steps_to_reproduce || "",
@@ -147,7 +148,10 @@ export function BugDetail({
   function handleSave() {
     startTransition(async () => {
       try {
-        await updateBugFields(bug.id, fields);
+        await updateBugFields(bug.id, {
+          ...fields,
+          test_case_id: fields.test_case_id.trim() || null,
+        });
         toast.success("Bug report updated.");
         setIsEditing(false);
       } catch (err) {
@@ -228,6 +232,20 @@ export function BugDetail({
           ) : (
             <h1 className="text-xl font-medium tracking-tight">{bug.title}</h1>
           )}
+          {isEditing ? (
+            <Input
+              value={fields.test_case_id}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, test_case_id: e.target.value }))
+              }
+              placeholder="Test Case ID (optional)"
+              className="max-w-xs text-sm"
+            />
+          ) : bug.test_case_id ? (
+            <p className="text-sm text-muted-foreground">
+              Test Case: <span className="font-medium text-foreground">{bug.test_case_id}</span>
+            </p>
+          ) : null}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {reporter ? (
               <Avatar className="size-5">

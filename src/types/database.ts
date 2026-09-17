@@ -29,6 +29,7 @@ export interface Bug {
   id: string;
   title: string;
   description: string;
+  test_case_id: string | null;
   priority: BugPriority;
   severity: BugSeverity;
   steps_to_reproduce: string | null;

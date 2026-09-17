@@ -50,6 +50,7 @@ export async function createBug(formData: FormData): Promise<{ bugId: string }> 
 
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
+  const testCaseId = String(formData.get("test_case_id") || "").trim() || null;
   const priority = String(formData.get("priority") || "Medium") as BugPriority;
   const severity = String(formData.get("severity") || "Minor") as BugSeverity;
   const stepsToReproduce = String(formData.get("steps_to_reproduce") || "");
@@ -67,6 +68,7 @@ export async function createBug(formData: FormData): Promise<{ bugId: string }> 
     .insert({
       title,
       description,
+      test_case_id: testCaseId,
       priority,
       severity,
       steps_to_reproduce: stepsToReproduce,
@@ -228,6 +230,7 @@ export async function updateBugFields(
   fields: {
     title: string;
     description: string;
+    test_case_id: string | null;
     priority: BugPriority;
     severity: BugSeverity;
     steps_to_reproduce: string;
