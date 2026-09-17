@@ -2,7 +2,7 @@
 
 Internal bug tracker for a single project, shared by three roles: **PM**, **DEV**, and **QA**. There is no multi-project switcher, but authentication is standard username/password: anyone on the team creates their own account on `/signup` and chooses their role, then signs in on `/login`.
 
-QA (or PM/DEV) can describe a bug in plain language, in any language, and Azure OpenAI turns it into a structured report: title, description, priority, severity, steps to reproduce, actual result, and expected result. An optional Test Case ID field lets a report be traced back to the test case that found it. Photo and video evidence can be attached to any bug, and the team can discuss each bug in a comment thread, with real-time notifications for status changes and new comments.
+QA (or PM/DEV) can describe a bug in plain language, in any language, and Azure OpenAI turns it into a structured report: title, description, priority, severity, steps to reproduce, actual result, and expected result. An optional Test Case ID field lets a report be traced back to the test case that found it. A bug can be assigned to one person or to a whole team (PM, DEV, or QA); assigning to a team notifies every member of it. Photo and video evidence can be attached to any bug, and the team can discuss each bug in a comment thread, with real-time notifications for assignment, status changes, and new comments.
 
 ## Stack
 
@@ -22,6 +22,7 @@ QA (or PM/DEV) can describe a bug in plain language, in any language, and Azure 
    - [`supabase/migrations/0005_username_login.sql`](supabase/migrations/0005_username_login.sql) — adds the `username` column used for login.
    - [`supabase/migrations/0006_assignee_notifications.sql`](supabase/migrations/0006_assignee_notifications.sql) — allows the `assigned` notification type.
    - [`supabase/migrations/0007_test_case_id.sql`](supabase/migrations/0007_test_case_id.sql) — adds the optional `test_case_id` column to `bugs`.
+   - [`supabase/migrations/0008_assignee_team.sql`](supabase/migrations/0008_assignee_team.sql) — adds the `assignee_team` column so a bug can be assigned to a whole team instead of one person.
 3. From **Project Settings → API**, copy the project URL, anon key, and service role key into `.env.local` (see `.env.local.example`).
 
 Supabase Auth requires an email address, so sign-up derives a synthetic, never-emailed address from the chosen username (e.g. `alice@users.qa-bugtracker.internal`) and creates the account through the **Admin API** with `email_confirm: true`. This means no confirmation email is ever sent, and the project's "Confirm email" setting does not need to be changed.

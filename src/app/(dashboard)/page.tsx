@@ -161,7 +161,9 @@ export default async function DashboardPage({
                     <SeverityBadge value={bug.severity} />
                   </TableCell>
                   <TableCell>
-                    {assignee ? (
+                    {bug.assignee_team ? (
+                      <span className="text-sm">Team: {bug.assignee_team}</span>
+                    ) : assignee ? (
                       <div className="flex items-center gap-2">
                         <Avatar className="size-6">
                           <AvatarFallback className="text-[0.6rem]">

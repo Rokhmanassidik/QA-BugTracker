@@ -24,7 +24,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -53,6 +55,7 @@ import {
   BUG_PRIORITIES,
   BUG_SEVERITIES,
   BUG_STATUSES,
+  USER_ROLES,
   type Bug,
   type BugComment,
   type BugPriority,
@@ -176,7 +179,7 @@ export function BugDetail({
     if (!value) return;
     startTransition(async () => {
       try {
-        await assignBug(bug.id, value === "unassigned" ? null : value);
+        await assignBug(bug.id, value);
         toast.success("Assignee updated.");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to assign bug.");
@@ -361,13 +364,14 @@ export function BugDetail({
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Assignee</Label>
           <Select
-            value={bug.assignee_id || "unassigned"}
+            value={bug.assignee_team ? `team:${bug.assignee_team}` : bug.assignee_id || "unassigned"}
             onValueChange={handleAssigneeChange}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-56">
               <SelectValue>
                 {(value: string) => {
                   if (value === "unassigned") return "Unassigned";
+                  if (value.startsWith("team:")) return `Team: ${value.slice(5)}`;
                   const assignee = profiles.find((p) => p.id === value);
                   return assignee ? `${assignee.full_name} (${assignee.role})` : "Unassigned";
                 }}
@@ -375,11 +379,22 @@ export function BugDetail({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="unassigned">Unassigned</SelectItem>
-              {profiles.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.full_name} ({p.role})
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel>Teams</SelectLabel>
+                {USER_ROLES.map((role) => (
+                  <SelectItem key={`team:${role}`} value={`team:${role}`}>
+                    Team: {role}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel>People</SelectLabel>
+                {profiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.full_name} ({p.role})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>

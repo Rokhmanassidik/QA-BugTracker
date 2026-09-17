@@ -9,6 +9,7 @@ import type {
   BugStatus,
   EvidenceFileType,
   NotificationType,
+  UserRole,
 } from "@/types/database";
 
 const EVIDENCE_BUCKET = "bug-evidence";
@@ -17,25 +18,46 @@ function truncate(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-// Notifies a single recipient (the bug's assignee) about activity on a bug.
-// Never notifies the person who caused the activity.
-async function notifyUser(
+// A bug is assigned either to one person or to a whole team, never both
+// (enforced by a DB constraint). Resolves that into the list of profile
+// ids who should be notified about activity on the bug.
+async function resolveRecipients(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bug: { assignee_id: string | null; assignee_team: UserRole | null },
+): Promise<string[]> {
+  if (bug.assignee_id) return [bug.assignee_id];
+  if (bug.assignee_team) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", bug.assignee_team);
+    return (data || []).map((p) => p.id);
+  }
+  return [];
+}
+
+// Notifies every recipient about activity on a bug. Never notifies the
+// person who caused the activity.
+async function notifyRecipients(
   supabase: Awaited<ReturnType<typeof createClient>>,
   actorId: string,
-  recipientId: string | null,
+  recipientIds: string[],
   bugId: string,
   type: NotificationType,
   message: string,
 ) {
-  if (!recipientId || recipientId === actorId) return;
+  const targets = [...new Set(recipientIds)].filter((id) => id !== actorId);
+  if (targets.length === 0) return;
 
-  await supabase.from("notifications").insert({
-    recipient_id: recipientId,
-    actor_id: actorId,
-    bug_id: bugId,
-    type,
-    message,
-  });
+  await supabase.from("notifications").insert(
+    targets.map((recipientId) => ({
+      recipient_id: recipientId,
+      actor_id: actorId,
+      bug_id: bugId,
+      type,
+      message,
+    })),
+  );
 }
 
 export async function createBug(formData: FormData): Promise<{ bugId: string }> {
@@ -171,7 +193,7 @@ export async function updateBugStatus(bugId: string, status: BugStatus) {
     .from("bugs")
     .update({ status })
     .eq("id", bugId)
-    .select("assignee_id, title")
+    .select("assignee_id, assignee_team, title")
     .single();
 
   if (error) {
@@ -179,10 +201,11 @@ export async function updateBugStatus(bugId: string, status: BugStatus) {
   }
 
   if (user && bug) {
-    await notifyUser(
+    const recipients = await resolveRecipients(supabase, bug);
+    await notifyRecipients(
       supabase,
       user.id,
-      bug.assignee_id,
+      recipients,
       bugId,
       "status_change",
       `${status}: ${truncate(bug.title, 40)}`,
@@ -193,15 +216,22 @@ export async function updateBugStatus(bugId: string, status: BugStatus) {
   revalidatePath("/");
 }
 
-export async function assignBug(bugId: string, assigneeId: string | null) {
+// `target` is "unassigned", "team:PM" / "team:DEV" / "team:QA" to assign
+// the whole team, or a profile id to assign one person.
+export async function assignBug(bugId: string, target: string) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const assigneeTeam = target.startsWith("team:")
+    ? (target.slice("team:".length) as UserRole)
+    : null;
+  const assigneeId = !assigneeTeam && target !== "unassigned" ? target : null;
+
   const { data: bug, error } = await supabase
     .from("bugs")
-    .update({ assignee_id: assigneeId })
+    .update({ assignee_id: assigneeId, assignee_team: assigneeTeam })
     .eq("id", bugId)
     .select("title")
     .single();
@@ -211,10 +241,14 @@ export async function assignBug(bugId: string, assigneeId: string | null) {
   }
 
   if (user && bug) {
-    await notifyUser(
+    const recipients = await resolveRecipients(supabase, {
+      assignee_id: assigneeId,
+      assignee_team: assigneeTeam,
+    });
+    await notifyRecipients(
       supabase,
       user.id,
-      assigneeId,
+      recipients,
       bugId,
       "assigned",
       `Assigned: ${truncate(bug.title, 40)}`,
@@ -268,7 +302,11 @@ export async function addComment(bugId: string, content: string) {
       author_id: user.id,
       content: trimmed,
     }),
-    supabase.from("bugs").select("assignee_id, title").eq("id", bugId).single(),
+    supabase
+      .from("bugs")
+      .select("assignee_id, assignee_team, title")
+      .eq("id", bugId)
+      .single(),
   ]);
 
   if (error) {
@@ -276,10 +314,11 @@ export async function addComment(bugId: string, content: string) {
   }
 
   if (bug) {
-    await notifyUser(
+    const recipients = await resolveRecipients(supabase, bug);
+    await notifyRecipients(
       supabase,
       user.id,
-      bug.assignee_id,
+      recipients,
       bugId,
       "new_comment",
       `New comment: ${truncate(bug.title, 40)}`,

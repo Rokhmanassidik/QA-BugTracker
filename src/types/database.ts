@@ -38,6 +38,7 @@ export interface Bug {
   status: BugStatus;
   reporter_id: string | null;
   assignee_id: string | null;
+  assignee_team: UserRole | null;
   ai_generated: boolean;
   original_report: string | null;
   created_at: string;
